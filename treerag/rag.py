@@ -7,6 +7,7 @@ Provides a simple one-stop API for vectorless, reasoning-based RAG.
 from __future__ import annotations
 import os
 import logging
+import time
 from typing import Optional
 
 from .models import TreeIndex
@@ -147,12 +148,14 @@ class TreeRAG:
             query=question,
             sections_text=sections_text[:15000],
         )
+        logger.info(f"Prompt Tokens: {len(prompt)//3.5}")
+        start_time = time.perf_counter()
         answer = self.retriever.client.chat(
             [{"role": "user", "content": prompt}],
             temperature=0.1,
             max_tokens=1024,
         ).strip()
-
+        logger.info(f"Retrieval Latency: {time.perf_counter() - start_time}")
         output = {
             "answer": answer,
             "nodes_used": [n.title for n in result.nodes],

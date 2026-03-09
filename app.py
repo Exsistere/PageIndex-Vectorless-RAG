@@ -74,9 +74,9 @@ if uploaded_file:
 user_input = st.chat_input("Ask something about sales or booking...")
 print(st.session_state.node_map, st.session_state.tree)
 if user_input:
-    if not st.session_state.node_map or not st.session_state.tree:
-        st.markdown("PDF Not Uploaded")
-        st.stop() 
+    # if not st.session_state.node_map or not st.session_state.tree:
+    #     st.markdown("PDF Not Uploaded")
+    #     st.stop() 
     # ---- Show user message
     st.session_state.messages.append(
         {"role": "user", "content": user_input}

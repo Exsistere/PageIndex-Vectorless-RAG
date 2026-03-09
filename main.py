@@ -22,8 +22,8 @@ load_dotenv(override=True)
 
 class ChatRequest(BaseModel):
     query: str
-    node_map: Dict[str, Any]
-    tree: Dict[str, Any]
+    # node_map: Dict[str, Any]
+    # tree: Dict[str, Any]
 
 
 # ── Initialize TreeRAG
@@ -65,7 +65,8 @@ async def PDFsubmit(file: UploadFile = File(None)):
 
 @app.post("/chat")
 async def chat(request: ChatRequest):
-    print(query)
     query= request.query
+    start_time = time.perf_counter()
     result = rag.query(query)
+    logger.info(f"E2E latency: {time.perf_counter() - start_time}")
     return JSONResponse(content = result)
