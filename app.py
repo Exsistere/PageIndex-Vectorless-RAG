@@ -67,9 +67,6 @@ if uploaded_file:
     response = requests.post(SUBMIT_URL, files=files)
     if response.status_code == 200:
         data = response.json()
-        st.session_state.doc_id = data["doc_id"]
-        st.session_state.tree = data["tree"]
-        st.session_state.node_map = data["node_map"]
         st.success("PDF submitted successfully! It will be processed in the background.")
 # -----------------------------
 # Chat input
@@ -94,8 +91,6 @@ if user_input:
         with st.spinner("Thinking..."):
             data_to_send = {
                 "query": user_input,
-                "node_map": st.session_state.node_map,
-                "tree": st.session_state.tree
             }
             # if st.session_state.doc_id:
             #     data_to_send["doc_id"] = st.session_state.doc_id
@@ -119,7 +114,7 @@ if user_input:
                 result = response.json()
                 # st.session_state.graph_state = result.get("state", st.session_state.graph_state)
                 assistant_reply = (
-                    f"Response: {result['Response']}"
+                    f"Response: {result['answer']}"
                 )
 
 
