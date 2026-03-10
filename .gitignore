@@ -2,3 +2,4 @@ venv/
 .env
 uploads/
 __pycache__
+sample_treeindex.json

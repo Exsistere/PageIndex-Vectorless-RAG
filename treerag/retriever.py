@@ -17,7 +17,7 @@ from typing import Optional
 from .models import TreeNode, TreeIndex
 from .client import OpenAIClient
 from .extractor import extract_pdf_pages, pages_to_text
-
+import time
 logger = logging.getLogger("treerag")
 
 
@@ -41,7 +41,6 @@ Instructions:
 
 Return ONLY valid JSON:
 {{
-  "reasoning": "Brief explanation of why these sections were selected",
   "selected_node_ids": ["0003", "0007"]
 }}
 """
@@ -230,13 +229,16 @@ class TreeRetriever:
             doc_description=doc_description,
             sections_outline=outline,
         )
+        logger.info(f"Node Selection Prompt: {prompt}")
         try:
+            start_time = time.perf_counter()
             result = self.client.chat_json(
                 [{"role": "user", "content": prompt}], max_tokens=512
             )
+            logger.info(f"Node Selection time: {time.perf_counter() - start_time}")
             selected_ids = set(result.get("selected_node_ids", []))
-            logger.info(f"  Selected nodes: {selected_ids}")
-            logger.info(f"  Reasoning: {result.get('reasoning', '')}")
+            logger.info(f"Selected nodes: {selected_ids}")
+            # logger.info(f"  Reasoning: {result.get('reasoning', '')}")
 
             selected = [n for n in nodes if n.node_id in selected_ids]
             if not selected:
@@ -248,7 +250,7 @@ class TreeRetriever:
             return nodes[:self.top_k_nodes]
 
     def _drill_down(self, node: TreeNode, query: str, depth: int) -> list[TreeNode]:
-        """Recursively drill into children if they exist."""
+        """Recursively drill into children nodes if they exist."""
         if not node.children or depth >= self.max_depth:
             return [node]
 

@@ -299,7 +299,7 @@ class TreeIndexer:
             start_page=1,
             end_page=total_pages,
             total_pages=total_pages,
-            text=text[:12000],
+            text=text[:120000],
         )
         try:
             result = self.client.chat_json(

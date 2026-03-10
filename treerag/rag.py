@@ -138,15 +138,16 @@ class TreeRAG:
             - context (optional): The raw extracted text used
         """
         self._check_ready()
+        start_time = time.perf_counter()
         result, sections_text = self.retriever.search_and_extract(
             self._tree, question, self._doc_path
         )
-
+        logger.info(f"First LLM Call time: {time.perf_counter() - start_time}")
         # Generate answer
         from .retriever import EXTRACT_ANSWER_PROMPT
         prompt = EXTRACT_ANSWER_PROMPT.format(
             query=question,
-            sections_text=sections_text[:15000],
+            sections_text=sections_text[:1500],
         )
         logger.info(f"Prompt Tokens: {len(prompt)//3.5}")
         start_time = time.perf_counter()
@@ -155,12 +156,12 @@ class TreeRAG:
             temperature=0.1,
             max_tokens=1024,
         ).strip()
-        logger.info(f"Retrieval Latency: {time.perf_counter() - start_time}")
+        logger.info(f"Second LLM Call time: {time.perf_counter() - start_time}")
         output = {
             "answer": answer,
             "nodes_used": [n.title for n in result.nodes],
             "page_ranges": result.page_ranges,
-            "reasoning": result.reasoning,
+            # "reasoning": result.reasoning,
         }
         if return_context:
             output["context"] = sections_text
