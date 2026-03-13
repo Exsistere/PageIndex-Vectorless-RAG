@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import uuid
 import json
-BACKEND_URL = "http://127.0.0.1:8000"
+BACKEND_URL = "http://127.0.0.1:8010"
 SUBMIT_URL = f"{BACKEND_URL}/submit"
 CHAT_URL = f"{BACKEND_URL}/chat"
 st.set_page_config(page_title="LLM Chatbot", layout="centered")

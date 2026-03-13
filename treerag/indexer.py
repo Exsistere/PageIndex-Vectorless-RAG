@@ -30,14 +30,43 @@ logger = logging.getLogger("treerag")
 
 DETECT_TOC_PROMPT = """You are a document analysis expert. The following text is from the first pages of a document.
 
-Your task: Determine if there is a Table of Contents (TOC) present in this text.
-If yes, extract the TOC entries. If no, return an empty list.
+Task:
+1. Determine whether the text contains a Table of Contents (TOC).
+2. If a TOC exists, extract ALL entries including subsections and thier section.
+
+Important rules:
+- TOC entries often contain hierarchical numbering such as:
+  1
+  1.1
+  1.2
+  1.2.1
+- Treat these as separate entries.
+- Include both parent sections and subsections.
+- Extract the page number at the end of the line.
+- If numbering exists (1, 1.1, 1.2.1 etc), extract it separately as the "number" field.
+- Ignore dot leaders (......).
+- Each numbered line is a separate entry.
+Example:
+
+Input:
+7. Bid Evaluation .................................. 157
+7.1 Bid Evaluation Process .......................... 157
+7.2 Preparation of Comparative Statement ............ 158
+
+Output entries:
+- "Bid Evaluation"
+- "Bid Evaluation Process"
+- "Preparation of Comparative Statement"
 
 Return ONLY valid JSON in this exact format:
 {{
   "has_toc": true,
   "entries": [
-    {{"title": "Section Title", "page": 5}},
+    {{
+        "number": "7.1",
+        "title": "Bid Evaluation Process",
+        "page": 157
+    }},
     ...
   ]
 }}
@@ -61,6 +90,7 @@ Rules:
 - Each node must have a start_page and end_page (end_page = next sibling's start_page - 1, or total_pages for last node)
 - Assign node_ids as 4-digit zero-padded numbers (0001, 0002, ...) in depth-first order
 - Include a brief summary field (leave empty string "" for now, it will be filled later)
+- Do not invent sections. Only use the provided TOC entries.
 
 Return ONLY valid JSON:
 {{
@@ -198,7 +228,7 @@ class TreeIndexer:
 
         # Try embedded PDF TOC first
         pdf_toc = extract_pdf_toc(pdf_path)
-        if pdf_toc and len(pdf_toc) >= 3:
+        if pdf_toc and len(pdf_toc) >= 3 and False:  # TODO: Remove 'False and' once testing is complete
             logger.info(f"Found embedded PDF TOC with {len(pdf_toc)} entries.")
             tree = self._build_from_toc(pdf_toc, total_pages, pdf_path)
         else:
@@ -206,6 +236,7 @@ class TreeIndexer:
             logger.info("Checking first pages for table of contents...")
             check_pages = min(self.toc_check_pages, total_pages)
             toc_text = pages_to_text(pages, 1, check_pages)
+            logger.info(f"toc text: {toc_text}")
             detected = self._detect_toc(toc_text)
 
             if detected and len(detected) >= 3:
@@ -253,12 +284,15 @@ class TreeIndexer:
     # ── TOC-based building ─────────────────────────────────────────────────────
 
     def _detect_toc(self, text: str) -> list[dict]:
-        prompt = DETECT_TOC_PROMPT.format(text=text[:8000])
+        prompt = DETECT_TOC_PROMPT.format(text=text[:80000])
+        logger.info(f"TOC detection Prompt: {prompt}")
         try:
             result = self.client.chat_json([{"role": "user", "content": prompt}])
             if result.get("has_toc") and result.get("entries"):
+                logger.info(f"Extracted TOC: {result.get('entries')}")
                 return result["entries"]
         except Exception as e:
+            print(result)
             logger.warning(f"TOC detection failed: {e}")
         return []
 

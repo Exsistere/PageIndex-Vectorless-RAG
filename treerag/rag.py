@@ -147,9 +147,9 @@ class TreeRAG:
         from .retriever import EXTRACT_ANSWER_PROMPT
         prompt = EXTRACT_ANSWER_PROMPT.format(
             query=question,
-            sections_text=sections_text[:1500],
+            sections_text=sections_text[:15000],
         )
-        logger.info(f"Prompt Tokens: {len(prompt)//3.5}")
+        logger.info(f"llm call 2 PROMPT: {prompt}")
         start_time = time.perf_counter()
         answer = self.retriever.client.chat(
             [{"role": "user", "content": prompt}],

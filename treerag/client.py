@@ -38,7 +38,7 @@ class OpenAIClient:
             )
         self._client = OpenAI(api_key=key)
 
-    def chat(self, messages: list[dict], temperature: float = 0.0, max_tokens: int = 4096) -> str:
+    def chat(self, messages: list[dict], temperature: float = 0.0, max_tokens: int = 4096, cache_key: Optional[str] = None) -> str:
         """Send a chat completion request and return the response text."""
         for attempt in range(self.max_retries):
             try:
@@ -47,7 +47,9 @@ class OpenAIClient:
                     messages=messages,
                     temperature=temperature,
                     max_tokens=max_tokens,
+                    prompt_cache_key= cache_key
                 )
+                logger.info(f"LLM usage: {resp.usage}")
                 return resp.choices[0].message.content or ""
             except Exception as e:
                 if attempt < self.max_retries - 1:
@@ -61,12 +63,13 @@ class OpenAIClient:
         messages: list[dict],
         temperature: float = 0.0,
         max_tokens: int = 4096,
+        cache_key: Optional[str] = None,
     ) -> dict | list:
         """
         Send a chat completion and parse the response as JSON.
         Strips markdown code fences if present.
         """
-        raw = self.chat(messages, temperature=temperature, max_tokens=max_tokens)
+        raw = self.chat(messages, temperature=temperature, max_tokens=max_tokens, cache_key = cache_key)
         return self._parse_json(raw)
 
     def _parse_json(self, text: str) -> dict | list:

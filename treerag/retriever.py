@@ -18,14 +18,13 @@ from .models import TreeNode, TreeIndex
 from .client import OpenAIClient
 from .extractor import extract_pdf_pages, pages_to_text
 import time
+import hashlib
 logger = logging.getLogger("treerag")
 
 
 # ── Prompts ──────────────────────────────────────────────────────────────────
 
 TREE_SEARCH_PROMPT = """You are a document retrieval expert. Your task is to identify which sections of a document are most relevant to answer a query.
-
-Query: {query}
 
 Document: "{doc_title}"
 {doc_description}
@@ -38,6 +37,8 @@ Instructions:
 - You may select 1-5 sections
 - Prefer more specific/leaf sections over broad parent sections when possible
 - Think step by step: what does the query ask for? Which sections cover that topic?
+
+Query: {query}
 
 Return ONLY valid JSON:
 {{
@@ -156,7 +157,7 @@ class TreeRetriever:
         return result, extracted_text
 
     def answer(
-        self, tree: TreeIndex, query: str, pdf_path: str, max_context_chars: int = 15000
+        self, tree: TreeIndex, query: str, pdf_path: str, max_context_chars: int = 150000
     ) -> dict:
         """
         Full RAG pipeline: search → extract → generate answer.
@@ -229,11 +230,12 @@ class TreeRetriever:
             doc_description=doc_description,
             sections_outline=outline,
         )
-        logger.info(f"Node Selection Prompt: {prompt}")
+        static_content = f"{doc_title}{doc_description}{outline}"
+        cache_key = hashlib.sha256(static_content.encode()).hexdigest()
         try:
             start_time = time.perf_counter()
             result = self.client.chat_json(
-                [{"role": "user", "content": prompt}], max_tokens=512
+                [{"role": "user", "content": prompt}], max_tokens=512, cache_key= cache_key
             )
             logger.info(f"Node Selection time: {time.perf_counter() - start_time}")
             selected_ids = set(result.get("selected_node_ids", []))
@@ -281,7 +283,7 @@ class TreeRetriever:
 
     def _nodes_to_outline(self, nodes: list[TreeNode]) -> str:
         lines = []
-        for n in nodes:
+        for n in nodes: # TODO increase the summary text length, must end with punctuation
             summary_preview = f" — {n.summary[:100]}..." if n.summary else ""
             lines.append(f"[{n.node_id}] {n.title} (pp. {n.start_page}–{n.end_page}){summary_preview}")
         return "\n".join(lines)
