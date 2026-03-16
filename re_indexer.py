@@ -4,12 +4,12 @@ with open('sample_treeindex.json', 'r') as file:
     data = json.load(file)
 
 for node in data["roots"]:
-    node["start_page"] += 25
-    node["end_page"] += 25
+    node["start_page"] -= 2
+    node["end_page"] -= 2
     if "children" in node:
         for child_node in node["children"]:
-            child_node["start_page"] += 25
-            child_node["end_page"] += 25
+            child_node["start_page"] -= 2
+            child_node["end_page"] -= 2
 
 with open('temp.json', 'w') as file:
     json.dump(data, file, indent=4)
