@@ -9,6 +9,7 @@ import os
 import time
 import logging
 from typing import Optional
+from .utils import track_time, track_llm_call
 
 logger = logging.getLogger("treerag")
 
@@ -49,8 +50,11 @@ class OpenAIClient:
                     max_tokens=max_tokens,
                     prompt_cache_key= cache_key
                 )
-                logger.info(f"LLM usage: {resp.usage}")
-                return resp.choices[0].message.content or ""
+                # logger.info(f"{resp.usage}")
+                return {
+                    "content" : resp.choices[0].message.content or "",
+                    "usage": resp.usage
+                }
             except Exception as e:
                 if attempt < self.max_retries - 1:
                     logger.warning(f"OpenAI call failed (attempt {attempt+1}): {e}. Retrying...")
@@ -70,8 +74,10 @@ class OpenAIClient:
         Strips markdown code fences if present.
         """
         raw = self.chat(messages, temperature=temperature, max_tokens=max_tokens, cache_key = cache_key)
-        return self._parse_json(raw)
-
+        return {
+            "content" : self._parse_json(raw["content"]),
+            "usage": raw["usage"]
+        }
     def _parse_json(self, text: str) -> dict | list:
         # Strip ```json ... ``` fences
         text = text.strip()

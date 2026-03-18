@@ -15,7 +15,7 @@ from .indexer import TreeIndexer
 from .retriever import TreeRetriever
 
 logger = logging.getLogger("treerag")
-
+from .utils import track_time, track_llm_call, patch_llm_call
 
 class TreeRAG:
     """
@@ -120,7 +120,7 @@ class TreeRAG:
         return self._tree
 
     # ── Querying ───────────────────────────────────────────────────────────────
-
+    @track_time("query")
     def query(self, question: str, return_context: bool = False) -> dict:
         """
         Answer a question using reasoning-based tree search + generation.
@@ -138,33 +138,35 @@ class TreeRAG:
             - context (optional): The raw extracted text used
         """
         self._check_ready()
-        start_time = time.perf_counter()
-        result, sections_text = self.retriever.search_and_extract(
-            self._tree, question, self._doc_path
-        )
-        logger.info(f"First LLM Call time: {time.perf_counter() - start_time}")
+        # result, sections_text = self.retriever.search_and_extract(
+        #     self._tree, question, self._doc_path
+        # )
+        selected_nodes = self.retriever.search(self._tree, question)
+        from RAG.collection_querying import load_collection,query_collection
+        collection = load_collection("sample_collection")
+        result = query_collection(question, list(map(lambda node: int(node.node_id),selected_nodes.nodes)), collection)
         # Generate answer
         from .retriever import EXTRACT_ANSWER_PROMPT
         prompt = EXTRACT_ANSWER_PROMPT.format(
             query=question,
-            sections_text=sections_text[:15000],
+            sections_text=result["context"][:15000],
         )
-        logger.info(f"llm call 2 PROMPT: {prompt}")
-        start_time = time.perf_counter()
-        answer = self.retriever.client.chat(
+        # logger.info(f"llm call 2 PROMPT: {prompt}")
+        answer = track_llm_call(self.retriever.client.chat)(
             [{"role": "user", "content": prompt}],
             temperature=0.1,
             max_tokens=1024,
-        ).strip()
-        logger.info(f"Second LLM Call time: {time.perf_counter() - start_time}")
+            llm_label="query"
+        )["content"].strip()
+
         output = {
             "answer": answer,
-            "nodes_used": [n.title for n in result.nodes],
-            "page_ranges": result.page_ranges,
+            "nodes_used": [n.title for n in selected_nodes.nodes],
+            # "page_ranges": result.page_ranges,
             # "reasoning": result.reasoning,
         }
         if return_context:
-            output["context"] = sections_text
+            output["context"] = result["context"]
         return output
 
     def search(self, query: str):

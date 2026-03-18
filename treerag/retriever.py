@@ -19,6 +19,7 @@ from .client import OpenAIClient
 from .extractor import extract_pdf_pages, pages_to_text
 import time
 import hashlib
+from .utils import track_time, track_llm_call, patch_llm_call
 logger = logging.getLogger("treerag")
 
 
@@ -121,9 +122,10 @@ class TreeRetriever:
         top_k_nodes: int = 3,
     ):
         self.client = OpenAIClient(api_key=api_key, model=model)
+        patch_llm_call(self.client)
         self.max_depth = max_depth
         self.top_k_nodes = top_k_nodes
-
+    @track_time("retriever.search")
     def search(self, tree: TreeIndex, query: str) -> RetrievalResult:
         """
         Perform agentic tree search to find relevant sections.
@@ -131,6 +133,7 @@ class TreeRetriever:
         """
         logger.info(f"Searching tree for: {query!r}")
         selected_nodes = self._tree_search(tree, query)
+        logger.info(f"Selected nodes: {[nodes.node_id for nodes in selected_nodes]}")
         page_ranges = list({(n.start_page, n.end_page) for n in selected_nodes})
         page_ranges.sort()
 
@@ -185,7 +188,7 @@ class TreeRetriever:
         }
 
     # ── Internal tree search ───────────────────────────────────────────────────
-
+    @track_time("retriever._tree_search")
     def _tree_search(self, tree: TreeIndex, query: str) -> list[TreeNode]:
         """Multi-level tree search using LLM reasoning at each level."""
         # First: search at root level
@@ -214,7 +217,7 @@ class TreeRetriever:
                 unique.append(n)
 
         return unique[:self.top_k_nodes * 2]  # Allow some extra before final answer
-
+    @track_time("retriever._select_from_level")
     def _select_from_level(
         self,
         nodes: list[TreeNode],
@@ -233,24 +236,26 @@ class TreeRetriever:
         static_content = f"{doc_title}{doc_description}{outline}"
         cache_key = hashlib.sha256(static_content.encode()).hexdigest()
         try:
-            start_time = time.perf_counter()
             result = self.client.chat_json(
-                [{"role": "user", "content": prompt}], max_tokens=512, cache_key= cache_key
-            )
-            logger.info(f"Node Selection time: {time.perf_counter() - start_time}")
+                [{"role": "user", "content": prompt}], 
+                max_tokens=512, 
+                cache_key= cache_key,
+                llm_label = "_select_from_level"
+            )["content"]
             selected_ids = set(result.get("selected_node_ids", []))
-            logger.info(f"Selected nodes: {selected_ids}")
             # logger.info(f"  Reasoning: {result.get('reasoning', '')}")
 
             selected = [n for n in nodes if n.node_id in selected_ids]
             if not selected:
                 # Fallback: select first node
+                logger.info("_select_from_level LLM Fallback")
                 selected = nodes[:1]
             return selected[:self.top_k_nodes]
         except Exception as e:
             logger.warning(f"Node selection failed: {e}. Using first nodes.")
             return nodes[:self.top_k_nodes]
-
+    
+    @track_time("retriever._drill_down")
     def _drill_down(self, node: TreeNode, query: str, depth: int) -> list[TreeNode]:
         """Recursively drill into children nodes if they exist."""
         if not node.children or depth >= self.max_depth:
@@ -266,11 +271,14 @@ class TreeRetriever:
         )
         try:
             result = self.client.chat_json(
-                [{"role": "user", "content": prompt}], max_tokens=512
-            )
+                [{"role": "user", "content": prompt}], 
+                max_tokens=512,
+                llm_label= "_drill_down"
+            )["content"]
             selected_ids = set(result.get("selected_node_ids", []))
             selected_children = [c for c in node.children if c.node_id in selected_ids]
             if not selected_children:
+                logger.info("drill down fallback")
                 selected_children = node.children[:1]
         except Exception:
             selected_children = node.children[:2]
@@ -280,7 +288,7 @@ class TreeRetriever:
         for child in selected_children:
             result_nodes.extend(self._drill_down(child, query, depth + 1))
         return result_nodes
-
+    @track_time("retriever._nodes_to_outline")
     def _nodes_to_outline(self, nodes: list[TreeNode]) -> str:
         lines = []
         for n in nodes: # TODO increase the summary text length, must end with punctuation
